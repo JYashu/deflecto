@@ -1,4 +1,4 @@
-<img src="https://cdn-icons.flaticon.com/png/512/2108/premium/2108062.png?token=exp=1637152061~hmac=507982f43f09ff92b9becd83e1b2522b" width="120" height="120" />
+<img src="https://github.com/JYashu/deflecto/blob/main/res/icon/deflecto1.png?raw=true" width="120" height="120" />
 
 # Deflecto
 A Brick Breaker game, coded with Java.
