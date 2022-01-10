@@ -17,14 +17,15 @@ public class Gameplay extends JPanel implements KeyListener, ActionListener {
     private static int highScore = 0;
     private static int score = 0;
     private static int level = 0;
-    private static boolean firstRun = true;
+    private static boolean firstRun;
 
     private boolean play = false;
     private boolean won = false;
+    private boolean gameOver = false;
 
     private int totalBricks;
 
-    private Timer timer;
+    private final Timer timer;
 
     private int playerX = 310;
 
@@ -32,9 +33,11 @@ public class Gameplay extends JPanel implements KeyListener, ActionListener {
     private int ballPosY = 500;
     private int ballXDir = -1;
     private int ballYDir = -2;
-    private int speedMultiplier = 1;
+    private int ballSpeedMultiplier = 1;
+    private int playerSpeedMultiplier = 1;
 
     private MapGenerator map;
+    private final SoundPlayer audio_player;
 
     static {
 
@@ -48,7 +51,11 @@ public class Gameplay extends JPanel implements KeyListener, ActionListener {
             while (!eof) {
                 try {
                     firstRun = dataFile.readBoolean();
-                    if (firstRun) {
+                    if (!firstRun) {
+                        highScore = dataFile.readInt();
+                        score = dataFile.readInt();
+                        level = dataFile.readInt();
+                    } else {
                         firstRun = false;
                         try (DataOutputStream writeFile = new DataOutputStream(new FileOutputStream("res/data/log.dat"))) {
                             writeFile.writeBoolean(firstRun);
@@ -59,9 +66,6 @@ public class Gameplay extends JPanel implements KeyListener, ActionListener {
 
                         }
                     }
-                    highScore = dataFile.readInt();
-                    score = dataFile.readInt();
-                    level = dataFile.readInt();
                 } catch (EOFException e) {
                     eof = true;
                 }
@@ -73,6 +77,7 @@ public class Gameplay extends JPanel implements KeyListener, ActionListener {
 
     public Gameplay() {
 
+        audio_player = new SoundPlayer();
         generateMap(level);
         addKeyListener(this);
         setFocusable(true);
@@ -83,71 +88,75 @@ public class Gameplay extends JPanel implements KeyListener, ActionListener {
     }
 
     public void generateMap(int level) {
-        int row, column;
+
+        int row , column;
         switch (level) {
+            case 0:
+                row = 1;
+                column = 4;
+                ballSpeedMultiplier = 1;
+                break;
             case 1:
                 row = 4;
                 column = 4;
-                speedMultiplier = 2;
+                ballSpeedMultiplier = 2;
                 break;
             case 2:
                 row = 4;
                 column = 6;
-                speedMultiplier = 2;
+                ballSpeedMultiplier = 2;
                 break;
             case 3:
                 row = 4;
                 column = 8;
-                speedMultiplier = 2;
+                ballSpeedMultiplier = 2;
                 break;
             case 4:
                 row = 4;
                 column = 10;
-                speedMultiplier = 3;
+                ballSpeedMultiplier = 2;
                 break;
             case 5:
                 row = 4;
                 column = 12;
-                speedMultiplier = 3;
+                ballSpeedMultiplier = 3;
                 break;
             case 6:
                 row = 6;
                 column = 12;
-                speedMultiplier = 3;
+                ballSpeedMultiplier = 3;
                 break;
             case 7:
                 row = 8;
                 column = 12;
-                speedMultiplier = 4;
+                ballSpeedMultiplier = 3;
                 break;
             case 8:
                 row = 8;
                 column = 14;
-                speedMultiplier = 4;
+                ballSpeedMultiplier = 4;
                 break;
             case 9:
                 row = 8;
                 column = 16;
-                speedMultiplier = 5;
-                break;
-            case 0:
-                row = 1;
-                column = 4;
-                speedMultiplier = 1;
+                ballSpeedMultiplier = 4;
                 break;
             default:
-                column = 16;
-                row = 10;
-                speedMultiplier = 5;
+                column = 10;
+                row = 16;
+                ballSpeedMultiplier = 5;
                 break;
         }
-        if (level > 10) {
+        if (level > 12) {
             row = 12;
+            ballSpeedMultiplier = 6;
         }
+
+        playerSpeedMultiplier = Math.min(ballSpeedMultiplier, 4);
         map = new MapGenerator(row, column);
         totalBricks = row * column;
-        ballXDir = -1 * speedMultiplier;
-        ballYDir = -2 * speedMultiplier;
+        ballXDir = -3;
+        ballYDir = -2 * ballSpeedMultiplier;
     }
 
     public void paint(Graphics g) {
@@ -170,9 +179,10 @@ public class Gameplay extends JPanel implements KeyListener, ActionListener {
 
         // walls
         g.setColor(Color.WHITE);
-        g.fillRect(0, 0, 3, 562);
+        g.fillRect(0, 0, 3, 608);
         g.fillRect(0, 0, 692, 3);
-        g.fillRect(681, 0, 3, 562);
+        g.fillRect(681, 0, 3, 608);
+        g.fillRect(0, 608, 692, 3);
 
         // high score
         g.setColor(Color.WHITE);
@@ -198,8 +208,23 @@ public class Gameplay extends JPanel implements KeyListener, ActionListener {
         g.setColor(Color.YELLOW);
         g.fillOval(ballPosX, ballPosY, 10, 10);
 
+        if(!play) {
+
+            g.setColor(Color.black);
+            g.fillRect(1, 1, 692, 562);
+
+            g.setColor(Color.RED);
+            g.setFont(fontBL);
+            g.drawString("Deflecto", 290, 250);
+            g.setFont(fontBS);
+            g.drawString("Press [Enter] to Restart", 240, 310);
+        }
+
         // when player completes the level
         if (totalBricks <= 0) {
+
+            audio_player.stopAudio();
+            audio_player.play(0);
 
             try (DataOutputStream scoreFile = new DataOutputStream(new FileOutputStream("res/data/log.dat"))) {
                 scoreFile.writeBoolean(false);
@@ -215,16 +240,18 @@ public class Gameplay extends JPanel implements KeyListener, ActionListener {
             ballXDir = 0;
             ballYDir = 0;
             g.setColor(Color.RED);
-            g.setFont(new Font("serif", Font.BOLD, 30));
-            g.drawString("Level Completed", 260, 300);
+            g.setFont(fontBL);
+            g.drawString("Level Completed", 240, 250);
 
-            g.setFont(new Font("serif", Font.BOLD, 20));
-            g.drawString("Press [Enter] to Start Next Level", 230, 350);
+            g.setFont(fontBS);
+            g.drawString("Press [Enter] to Start Next Level", 210, 310);
         }
 
         // when player loses the game
         if (ballPosY > 570) {
 
+            audio_player.stopAudio();
+            gameOver = true;
             play = false;
             ballXDir = 0;
             ballYDir = 0;
@@ -249,11 +276,17 @@ public class Gameplay extends JPanel implements KeyListener, ActionListener {
 
             g.setColor(Color.RED);
             g.setFont(fontBL);
-            if (score > highScore) g.drawString("New High Score: " + score, 190, 300);
-            else g.drawString("Game Over, Scores: " + score, 190, 300);
+            if (score > highScore) {
+                audio_player.play(5);
+                g.drawString("New High Score: " + score, 215, 250);
+            } else {
+                audio_player.play(4);
+                g.drawString("Game Over", 270, 210);
+                g.drawString("Your Score: " + score, 255, 255);
+            }
 
             g.setFont(fontBS);
-            g.drawString("Press [Enter] to Restart", 230, 350);
+            g.drawString("Press [Enter] to Restart", 240, 310);
         }
 
         g.dispose();
@@ -262,26 +295,27 @@ public class Gameplay extends JPanel implements KeyListener, ActionListener {
     public void keyPressed(KeyEvent e) {
 
         if (e.getKeyCode() == KeyEvent.VK_RIGHT) {
-
-            if (playerX >= 584) {
-                playerX = 584;
+            if (playerX >= 581) {
+                playerX = 581;
             } else {
                 moveRight();
             }
         }
 
         if (e.getKeyCode() == KeyEvent.VK_LEFT) {
-
-            if (playerX <= 10) {
-                playerX = -10;
+            if (playerX <= 3) {
+                playerX = 3;
             } else {
                 moveLeft();
             }
         }
 
+        // if (e.getKeyCode() == KeyEvent.VK_ESCAPE) {        }
+
         if (e.getKeyCode() == KeyEvent.VK_ENTER) {
             if (!play) {
                 play = true;
+                audio_player.play(6);
                 ballPosX = 330;
                 ballPosY = 500;
                 ballXDir = -1;
@@ -289,9 +323,9 @@ public class Gameplay extends JPanel implements KeyListener, ActionListener {
                 if (won) {
                     level++;
                     won = false;
-                } else {
+                } else if (gameOver) {
                     playerX = 310;
-                    if (level > 0) {
+                    if (level >= 1) {
                         level = 1;
                     }
                     if (score > highScore) {
@@ -299,9 +333,11 @@ public class Gameplay extends JPanel implements KeyListener, ActionListener {
                     }
                     score = 0;
                 }
+
                 generateMap(level);
 
                 repaint();
+                audio_player.cue();
             }
         }
     }
@@ -313,13 +349,25 @@ public class Gameplay extends JPanel implements KeyListener, ActionListener {
     }
 
     public void moveRight() {
-        play = true;
-        playerX += 20 * speedMultiplier;
+        if (play) {
+            audio_player.play(7);
+            if ((playerX + (20 * playerSpeedMultiplier)) > 581) {
+                playerX = 581;
+            } else {
+                playerX += 20 * playerSpeedMultiplier;
+            }
+        }
     }
 
     public void moveLeft() {
-        play = true;
-        playerX -= 20 * speedMultiplier;
+        if (play) {
+            audio_player.play(7);
+            if ((playerX - (20 * playerSpeedMultiplier)) < 3) {
+                playerX = 3;
+            } else {
+                playerX -= 20 * playerSpeedMultiplier;
+            }
+        }
     }
 
     public void actionPerformed(ActionEvent e) {
@@ -327,19 +375,39 @@ public class Gameplay extends JPanel implements KeyListener, ActionListener {
         if (play) {
 
             // check wall deflect
-            if (ballPosX <= 0) ballXDir = -ballXDir;
-            if (ballPosY <= 0) ballYDir = -ballYDir;
-            if (ballPosX >= 670) ballXDir = -ballXDir;
+            if (ballPosX <= 0) {
+                ballXDir = -ballXDir;
+                audio_player.play(2);
+            }
+            if (ballPosY <= 0) {
+                ballYDir = -ballYDir;
+                audio_player.play(2);
+            }
+            if (ballPosX >= 670) {
+                ballXDir = -ballXDir;
+                audio_player.play(2);
+            }
 
             // check player deflect
             if (new Rectangle(ballPosX, ballPosY, 10, 10).intersects(new Rectangle(playerX, 550, 30, 8))) {
                 ballYDir = -ballYDir;
-                ballXDir = -2;
+                if (ballXDir > -6) {
+                    ballXDir -= 1;
+                } else {
+                    ballXDir = -6;
+                }
+                audio_player.play(3);
             } else if (new Rectangle(ballPosX, ballPosY, 10, 10).intersects(new Rectangle(playerX + 70, 550, 30, 8))) {
                 ballYDir = -ballYDir;
-                ballXDir = ballXDir + 1;
+                if (ballXDir < 6) {
+                    ballXDir += 1;
+                } else {
+                    ballXDir = 6;
+                }
+                audio_player.play(3);
             } else if (new Rectangle(ballPosX, ballPosY, 10, 10).intersects(new Rectangle(playerX + 30, 550, 40, 8))) {
                 ballYDir = -ballYDir;
+                audio_player.play(3);
             }
 
             // check map collision with the ball
@@ -359,9 +427,11 @@ public class Gameplay extends JPanel implements KeyListener, ActionListener {
                         if (ballRect.intersects(brickRect)) {
                             map.setBrickValue(0, i, j);
                             score += 5;
+                            audio_player.play(1);
                             totalBricks--;
 
-                            if (ballPosX + 9 <= brickRect.x || ballPosX + 1 >= brickRect.x + brickRect.width) {
+                            if ((ballPosX <= brickRect.x || ballPosX + 1 >= brickRect.x + brickRect.width) &&
+                                    (ballPosY > brickRect.y && ballPosY < brickRect.y + brickRect.height)) {
                                 ballXDir = -ballXDir;
                             } // when ball hit right or left of brick
                             else ballYDir = -ballYDir; // when ball hits top or bottom of brick
